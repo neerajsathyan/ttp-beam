@@ -71,7 +71,7 @@ def noise_for_guidance_value(sigma: float, layer: int, first_k_layers_noisy: int
 # incrementally checks whether playing (away_team, home_team) would result into a node that is admissible for the
 # beam by its f-value, otherwise it is not expanded
 def delta_optimality_check(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int, beam: PriorityQueue,
-                           beam_width: int, bounds_by_state: Union[np.array(4, int), np.array(5, int), None],
+                           beam_width: int, bounds_by_state: Union[[]: int, None],
                            heuristic_estimates_cache: Union[
                                Dict[Tuple[int, int, int, int], int], int, Dict[
                                    Tuple[int, int, int, int, int, int], int], None], noise: float):
