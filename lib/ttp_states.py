@@ -1,14 +1,17 @@
 # TTP states related classes and basic functions
+from copy import copy
 from typing import Union
 
 import numpy as np
+
+from lib.ttp_instance import TTPInstance
 
 
 class State:
     def __init__(self, games_left: np.array(2, bool), forbidden_opponents: np.array(1, int), rounds: np.array(1, int),
                  positions: np.array(1, int), possible_away_streaks: np.array(1, int),
                  possible_home_stands: np.array(1, int)):
-        self.games_let = games_left
+        self.games_left = games_left
         self.forbidden_opponents = forbidden_opponents
         self.rounds = rounds
         self.positions = positions
@@ -59,8 +62,47 @@ class Node:
                 self.number_of_home_games_left, self.away_games_left_by_team, self.home_games_left_by_team,
                 self.teams_away_streak_limit_hit_last_round, self.teams_away_streak_limit_hit_current_round,
                 self.teams_home_stand_limit_hit_last_round, self.teams_home_stand_limit_hit_current_round) == (
-               other.layer, other.shortest_path_length, other.heuristic_estimate, other.games_left, other.state,
-               other.heuristic_estimates, other.noise, other.solution, other.number_of_away_games_left,
-               other.number_of_home_games_left, other.away_games_left_by_team, other.home_games_left_by_team,
-               other.teams_away_streak_limit_hit_last_round, other.teams_away_streak_limit_hit_current_round,
-               other.teams_home_stand_limit_hit_last_round, other.teams_home_stand_limit_hit_current_round)
+                   other.layer, other.shortest_path_length, other.heuristic_estimate, other.games_left, other.state,
+                   other.heuristic_estimates, other.noise, other.solution, other.number_of_away_games_left,
+                   other.number_of_home_games_left, other.away_games_left_by_team, other.home_games_left_by_team,
+                   other.teams_away_streak_limit_hit_last_round, other.teams_away_streak_limit_hit_current_round,
+                   other.teams_home_stand_limit_hit_last_round, other.teams_home_stand_limit_hit_current_round)
+
+
+# a state transitions copies the existing states and makes corresponding updates determined by the game being played
+def update_state(ttp_instance: TTPInstance, state: State, away_team: int, home_team: int,
+                 home_team_number_of_away_games_left: int, away_team_number_of_home_games_left: int):
+    games_left = copy(state.games_left)
+    games_left[away_team - 1][home_team - 1] = False
+
+    rounds = copy(state.rounds)
+    rounds[away_team - 1] += 1
+    rounds[home_team - 1] += 1
+
+    positions = copy(state.positions)
+    positions[away_team - 1] = home_team
+    positions[home_team - 1] = home_team
+
+    possible_away_streaks = copy(state.possible_away_streaks)
+    possible_away_streaks[away_team - 1] -= 1
+    possible_away_streaks[home_team - 1] = min(ttp_instance.streak_limit, home_team_number_of_away_games_left)
+
+    possible_home_stands = copy(state.possible_home_stands)
+    possible_home_stands[away_team - 1] = min(ttp_instance.streak_limit, away_team_number_of_home_games_left)
+    possible_home_stands[home_team - 1] -= 1
+
+    forbidden_opponents = copy(state.forbidden_opponents)
+    if ttp_instance.no_repeat:
+        if games_left[home_team - 1][away_team - 1]:
+            forbidden_opponents[away_team - 1] = home_team
+            forbidden_opponents[home_team - 1] = away_team
+        else:
+            forbidden_opponents[away_team - 1] = -1
+            forbidden_opponents[home_team - 1] = -1
+
+        for team in range(1, ttp_instance.n + 1):
+            if team != away_team and team != home_team and (
+                    forbidden_opponents[team - 1] == away_team or forbidden_opponents[team - 1] == home_team):
+                forbidden_opponents[team - 1] = -1
+
+    return State(games_left, forbidden_opponents, rounds, positions, possible_away_streaks, possible_home_stands)
