@@ -30,6 +30,7 @@ def main():
 
     print("Solving TTP instance %s with beam search, beam width %d, streak limit %d, no repeaters set to %s\n" % (instance_file, beam_width, streak_limit, no_repeat))
     #construction_time = @elapsed terminal, stats = TTPSolver.construct(ttp_instance, bounds_by_state, beam_width, dead_teams_check, randomized_team_order, relative_sigma, nothing, first_k_layers_noisy)
+    terminal, stats = TTPSolver.construct(ttp_instance, bounds_by_state, beam_width, dead_teams_check, randomized_team_order, relative_sigma, nothing, first_k_layers_noisy)
 
     #@printf("[CSV] %s;%d;%d;%d;%.02f;%d;%d;%f;%d\n", TTPUtil.basename(instance_file, ".txt"), ttp_instance.n, beam_width, terminal.shortest_path_length, construction_time, dead_teams_check, randomized_team_order, relative_sigma, first_k_layers_noisy)
 
