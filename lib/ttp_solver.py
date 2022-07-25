@@ -1,6 +1,6 @@
 from copy import copy
 from math import ceil
-from typing import Union, Dict, Tuple
+from typing import Union, Dict, Tuple, List
 
 import enum
 import numpy as np
@@ -71,7 +71,7 @@ def noise_for_guidance_value(sigma: float, layer: int, first_k_layers_noisy: int
 # incrementally checks whether playing (away_team, home_team) would result into a node that is admissible for the
 # beam by its f-value, otherwise it is not expanded
 def delta_optimality_check(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int, beam: PriorityQueue,
-                           beam_width: int, bounds_by_state: Union[[]: int, None],
+                           beam_width: int, bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
                            heuristic_estimates_cache: Union[
                                Dict[Tuple[int, int, int, int], int], int, Dict[
                                    Tuple[int, int, int, int, int, int], int], None], noise: float):
@@ -142,13 +142,12 @@ def calc_streak_limit_hits(ttp_instance: TTPInstance, node: Node, state: State, 
 
 # perform a state transition by playing game (away_team, home_team)
 def play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int,
-              bounds_by_state: Union[np.array(4, int), np.array(5, int), None], heuristic_estimates_cache: Union[
+              bounds_by_state: Union[[]:int, None], heuristic_estimates_cache: Union[
             Dict[Tuple[int, int, int, int], int], int, Dict[
                 Tuple[int, int, int, int, int, int], int], None], noise: float):
     new_node = Node()
     new_node.layer = node.layer + 1
-    weight = ttp_instance.d[node.state.positions[away_team - 1] - 1][home_team - 1] + \
-             ttp_instance.d[node.state.positions[home_team - 1] - 1][home_team - 1]
+    weight = ttp_instance.d[node.state.positions[away_team - 1] - 1][home_team - 1] + ttp_instance.d[node.state.positions[home_team - 1] - 1][home_team - 1]
     new_node.shortest_path_length = node.shortest_path_length + weight
     new_node.games_left = node.games_left - 1
     new_node.heuristic_estimates = copy(node.heuristic_estimates)
@@ -170,8 +169,8 @@ def play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: 
                                                                     new_node.home_games_left_by_team[home_team - 1],
                                                                     away_team))
     new_node.state = update_state(ttp_instance, node.state, away_team, home_team,
-                                  new_node.number_of_away_games_left[home_team],
-                                  new_node.number_of_home_games_left[away_team])
+                                  new_node.number_of_away_games_left[home_team-1],
+                                  new_node.number_of_home_games_left[away_team-1])
 
     calc_streak_limit_hits(ttp_instance, new_node, new_node.state, node, away_team, home_team)
 
@@ -228,7 +227,7 @@ def incorporate(parent: Node, new_node: Node, beam: PriorityQueue, beam_width: i
 # conditionally play (away_team, home_team), if it is currently allowed and would not result into an infeasible state
 # (according to our checks) and suboptimal node given our current beam
 def conditionally_play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int, beam: PriorityQueue,
-                            beam_width: int, bounds_by_state: Union[np.array(4, int), np.array(5, int), None],
+                            beam_width: int, bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
                             heuristic_estimates_cache: Union[
                                 Dict[Tuple[int, int, int, int], int], int, Dict[
                                     Tuple[int, int, int, int, int, int], int], None], dead_teams_check: bool,
@@ -258,17 +257,17 @@ def update(stats: Statistics, game_result: GameResult):
 
 def solution_to_rounds_matrix(ttp_instance: TTPInstance, solution: np.array(1, Tuple[int, int])):
     copied_solution = copy(solution)
-    rounds = 2 * ttp_instance.n-2
+    rounds = 2 * ttp_instance.n - 2
     rounds_matrix = np.zeros((rounds, ttp_instance.n), dtype=int)
-    for round in range(1, rounds+1):
-        for i in range(1, (ttp_instance.n/2)+1):
+    for round in range(1, rounds + 1):
+        for i in range(1, (ttp_instance.n / 2) + 1):
             game = solution.pop()
-            rounds_matrix[round-1][game[0]] = -game[1]
-            rounds_matrix[round-1][game[1]] = game[0]
+            rounds_matrix[round - 1][game[0]] = -game[1]
+            rounds_matrix[round - 1][game[1]] = game[0]
     return rounds_matrix
 
 
-def construct(ttp_instance: TTPInstance, bounds_by_state: Union[np.array(4, int), np.array(5, int), None],
+def construct(ttp_instance: TTPInstance, bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
               beam_width: int, dead_teams_check: bool, randomized_team_order: bool, sigma_rel: float,
               heuristic_estimates_cache: Union[
                   Dict[Tuple[int, int, int, int], int], int, Dict[Tuple[int, int, int, int, int, int], int], None],
