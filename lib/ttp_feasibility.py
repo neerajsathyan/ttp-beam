@@ -8,6 +8,7 @@ from lib.ttp_states import State, Node, update_state
 
 # check whether game can be played for which both teams have to be in the same round and the at-most/no-repeat
 # constraints must not be violated
+# Checked
 def game_allowed(ttp_instance: TTPInstance, state: State, away_team: int, home_team: int):
     return state.rounds[away_team - 1] == state.rounds[home_team - 1] and state.possible_away_streaks[
         away_team - 1] > 0 and state.possible_home_stands[home_team - 1] > 0 and (not ttp_instance.no_repeat or (
@@ -15,6 +16,9 @@ def game_allowed(ttp_instance: TTPInstance, state: State, away_team: int, home_t
         home_team - 1] != away_team))
 
 
+# checks whether there are still enough home games left to accommodate for the remaining away games (and vice versa)
+# for the away_team and home_team
+# Checked
 def delta_at_most_check(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int,
                         away_team_home_games_left: int, away_team_away_games_left: int,
                         home_team_home_games_left: int, home_team_away_games_left: int):
@@ -28,6 +32,7 @@ def delta_at_most_check(ttp_instance: TTPInstance, node: Node, away_team: int, h
 
 # if after playing (away_team, home_team) only two games are left for one of the teams, that are against the same
 # opponent, we would violate no-repeat for sure
+# Checked
 def delta_no_repeat_check(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int,
                           away_team_home_games_left: int, away_team_away_games_left: int,
                           home_team_home_games_left: int, home_team_away_games_left: int):
@@ -61,6 +66,7 @@ def delta_no_repeat_check(ttp_instance: TTPInstance, node: Node, away_team: int,
 
 
 # infer whether there cannot be a dead team after game (away_team, home_team)
+# Checked
 def delta_infer_no_dead_team(ttp_instance: TTPInstance, layer: int, state: State, team: int, team_home_games_left: int,
                              team_away_games_left: int, teams_away_streak_limit_hit_last_round: int,
                              teams_away_streak_limit_hit_current_round: int, teams_home_stand_limit_hit_last_round: int,
@@ -109,11 +115,12 @@ def delta_infer_no_dead_team(ttp_instance: TTPInstance, layer: int, state: State
     if state.forbidden_opponents[team - 1] != -1:
         worst_case_forbidden_games += 1
 
-    return worst_case_forbidden_games < (team_away_games_left + team_home_games_left)
+    return worst_case_forbidden_games < team_away_games_left + team_home_games_left
 
 
 # the incremental variant of game_allowed, where we check whether playing the game (away_team, home_team) would be
 # allowed
+# Checked
 def delta_game_allowed(ttp_instance: TTPInstance, state: State, team: int, opponent: int, away_team: int,
                        home_team: int):
     if state.rounds[team - 1] < state.rounds[opponent - 1]:
@@ -129,6 +136,7 @@ def delta_game_allowed(ttp_instance: TTPInstance, state: State, team: int, oppon
 
 # checks whether there would be a team left after game (away_team, home_team), that has no permitted games,
 # a dead team, O(n^2)
+# Checked
 def delta_check_dead_team(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int):
     state = update_state(ttp_instance, node.state, away_team, home_team, node.number_of_away_games_left[home_team - 1],
                          node.number_of_home_games_left[away_team - 1])
@@ -204,6 +212,7 @@ def delta_check_dead_team(ttp_instance: TTPInstance, node: Node, away_team: int,
 
 # incrementally check whether playing (away_team, home_team) would result into a state without a feasible completion
 # for certain according to our checks
+# Checked
 def delta_feasibility_check(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int,
                             dead_teams_check: bool):
     away_team_home_games_left = node.number_of_home_games_left[away_team - 1]
