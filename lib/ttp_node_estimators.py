@@ -71,6 +71,7 @@ def min_max_home_stands(ttp_instance: TTPInstance, team: int, teams_left: np.arr
 
 
 # CVRP or TSP
+# heuristic estimates based on precalculated exact cvrp bounds
 def heuristic_estimate(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
                        number_of_home_games_left: int, position: int, streak: int, bounds_by_state: np.array(4, int),
                        heuristic_estimates_cache: None):
@@ -81,8 +82,7 @@ def heuristic_estimate(ttp_instance: TTPInstance, team: int, teams_left: np.arra
     if team == position:
         streak2 = 0
     if streak2 == ttp_instance.streak_limit:
-        return ttp_instance.d[position - 1][team - 1] + \
-               bounds_by_state[team - 1][mask_teams_left(team, teams_left) - 1][team - 1][0]
+        return ttp_instance.d[position - 1][team - 1] + bounds_by_state[team - 1][mask_teams_left(team, teams_left) - 1][team - 1][0]
     else:
         return min(ttp_instance.d[position - 1][team - 1] +
                    bounds_by_state[team - 1][mask_teams_left(team, teams_left) - 1][team - 1][0],
@@ -90,7 +90,7 @@ def heuristic_estimate(ttp_instance: TTPInstance, team: int, teams_left: np.arra
 
 
 # heuristic estimates based on precalculated exact cvrph bounds
-def heuristic_estimate(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
+def heuristic_estimate_cvrph(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
                        number_of_home_games_left: int, position: int, streak: int, bounds_by_state: np.array(5, int),
                        heuristic_estimates_cache: None):
     if len(teams_left) == 0:

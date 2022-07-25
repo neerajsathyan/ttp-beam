@@ -5,12 +5,11 @@ from typing import Union, Dict, Tuple, List
 import enum
 import numpy as np
 
+from lib import heapdict
 from lib.ttp_feasibility import game_allowed, delta_feasibility_check
 from lib.ttp_instance import TTPInstance
-from lib.ttp_node_estimators import heuristic_estimate
+from lib.ttp_node_estimators import heuristic_estimate, heuristic_estimate_cvrph
 from lib.ttp_states import Node, State, update_state
-
-from queue import PriorityQueue
 
 
 class Statistics:
@@ -50,7 +49,8 @@ def terminal_state(ttp_instance: TTPInstance):
 
 
 def go_home(ttp_instance: TTPInstance, node: Node, terminal: Node):
-    weight = np.sum(map(lambda x: ttp_instance.d[node.state.positions[x] - 1][x - 1], np.arange(1, ttp_instance.n + 1)))
+    weight = np.sum(
+        map(lambda x: ttp_instance.d[node.state.positions[x - 1] - 1][x - 1], np.arange(1, ttp_instance.n + 1)))
     if node.shortest_path_length + weight < terminal.shortest_path_length:
         terminal.shortest_path_length = node.shortest_path_length + weight
         terminal.solution = copy(node.solution)
@@ -58,20 +58,23 @@ def go_home(ttp_instance: TTPInstance, node: Node, terminal: Node):
 
 
 def next_team(ttp_instance: TTPInstance, node: Node, teams_permutation: []):
-    return np.argmin(map(lambda x: (node.state.rounds[x], teams_permutation[x]), np.arange(1, ttp_instance.n + 1))) + 1
+    return np.argmin(
+        map(lambda x: (node.state.rounds[x - 1], teams_permutation[x - 1]), np.arange(1, ttp_instance.n + 1))) + 1
 
 
+# Optional Gaussian noise for f-values..
 def noise_for_guidance_value(sigma: float, layer: int, first_k_layers_noisy: int):
     if first_k_layers_noisy == -1 or layer <= first_k_layers_noisy:
-        return np.randn() * sigma
+        return np.random.randn() * sigma
     else:
         return 0.0
 
 
 # incrementally checks whether playing (away_team, home_team) would result into a node that is admissible for the
 # beam by its f-value, otherwise it is not expanded
-def delta_optimality_check(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int, beam: PriorityQueue,
-                           beam_width: int, bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
+def delta_optimality_check(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int, beam: heapdict,
+                           beam_width: int,
+                           bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
                            heuristic_estimates_cache: Union[
                                Dict[Tuple[int, int, int, int], int], int, Dict[
                                    Tuple[int, int, int, int, int, int], int], None], noise: float):
@@ -96,8 +99,8 @@ def delta_optimality_check(ttp_instance: TTPInstance, node: Node, away_team: int
                                                            node.state.possible_home_stands[home_team - 1] - 1),
                                                    bounds_by_state, heuristic_estimates_cache)
 
-    if beam.qsize() >= beam_width:
-        worst_state, worst_node = beam.queue[0]
+    if len(beam) >= beam_width:
+        worst_state, worst_node = beam.peekitem()
         if worst_node.shortest_path_length + worst_node.heuristic_estimate + worst_node.noise <= node.shortest_path_length + weight + node.heuristic_estimate + heuristic_estimate_delta + noise:
             return False
 
@@ -142,12 +145,14 @@ def calc_streak_limit_hits(ttp_instance: TTPInstance, node: Node, state: State, 
 
 # perform a state transition by playing game (away_team, home_team)
 def play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int,
-              bounds_by_state: Union[[]:int, None], heuristic_estimates_cache: Union[
-            Dict[Tuple[int, int, int, int], int], int, Dict[
-                Tuple[int, int, int, int, int, int], int], None], noise: float):
+              bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
+              heuristic_estimates_cache: Union[
+                  Dict[Tuple[int, int, int, int], int], int, Dict[
+                      Tuple[int, int, int, int, int, int], int], None], noise: float):
     new_node = Node()
     new_node.layer = node.layer + 1
-    weight = ttp_instance.d[node.state.positions[away_team - 1] - 1][home_team - 1] + ttp_instance.d[node.state.positions[home_team - 1] - 1][home_team - 1]
+    weight = ttp_instance.d[node.state.positions[away_team - 1] - 1][home_team - 1] + \
+             ttp_instance.d[node.state.positions[home_team - 1] - 1][home_team - 1]
     new_node.shortest_path_length = node.shortest_path_length + weight
     new_node.games_left = node.games_left - 1
     new_node.heuristic_estimates = copy(node.heuristic_estimates)
@@ -169,8 +174,8 @@ def play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: 
                                                                     new_node.home_games_left_by_team[home_team - 1],
                                                                     away_team))
     new_node.state = update_state(ttp_instance, node.state, away_team, home_team,
-                                  new_node.number_of_away_games_left[home_team-1],
-                                  new_node.number_of_home_games_left[away_team-1])
+                                  new_node.number_of_away_games_left[home_team - 1],
+                                  new_node.number_of_home_games_left[away_team - 1])
 
     calc_streak_limit_hits(ttp_instance, new_node, new_node.state, node, away_team, home_team)
 
@@ -197,37 +202,53 @@ def play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: 
     return new_node, weight
 
 
-def haskey(pq: PriorityQueue, key: State):
-    for i in range(len(pq.queue)):
-        if pq.queue[i] == key:
-            return True, i
-    return False, -1
+# def haskey(pq: PriorityQueue, key: State):
+#     for i in range(len(pq.queue)):
+#         if pq.queue[i][1] == key:
+#             return True, i
+#     return False, -1
+
+
+def check_state_exists(state: State, beam_dict: Dict[State, Tuple[Node, int, int]]):
+    for state2 in beam_dict:
+        if np.array_equal(state.games_left, state2.games_left) and np.array_equal(state.forbidden_opponents,
+                                                                                  state2.forbidden_opponents) \
+                and np.array_equal(state.rounds, state2.rounds) and np.array_equal(state.positions, state2.positions) \
+                and np.array_equal(state.possible_away_streaks, state2.possible_away_streaks) \
+                and np.array_equal(state.possible_home_stands, state2.possible_home_stands):
+            return True
+    return False
 
 
 # conditionally incorporate node into beam or update existing node with same state, if shortest path to it has been
 # found
-def incorporate(parent: Node, new_node: Node, beam: PriorityQueue, beam_width: int):
+def incorporate(parent: Node, new_node: Node, beam: heapdict, beam_width: int):
     # if haskey(beam, new_node.state)
     # if haskey(nodes, new_node.state)
-    case, ind = haskey(beam, new_node.state)
-    if case:
-        existing_node = beam.queue[ind]
+
+    if new_node.state in beam.d.keys():
+        # if check_state_exists(new_node.state, beam.d):
+        existing_node = beam.get(new_node.state)
         if new_node < existing_node:
-            beam.queue[ind] = new_node
+            beam[new_node.state] = new_node
+            # beam.queue.pop(ind)
+            # beam.put((new_node, new_node.state))
+            # beam.queue[ind][0] = new_node
     else:
-        if beam.qsize() < beam_width:
-            beam.put((new_node.state, new_node))
+        if len(beam) < beam_width:
+            beam[new_node.state] = new_node
         else:
-            worst_state, worst_node = beam.queue[0]
+            worst_state, worst_node = beam.peekitem()
             if new_node < worst_node:
-                beam.get()
-                beam.put((new_node.state, new_node))
+                beam[new_node.state] = new_node
+                beam.popitem()
 
 
 # conditionally play (away_team, home_team), if it is currently allowed and would not result into an infeasible state
 # (according to our checks) and suboptimal node given our current beam
-def conditionally_play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int, beam: PriorityQueue,
-                            beam_width: int, bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
+def conditionally_play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int, beam: heapdict,
+                            beam_width: int, bounds_by_state: Union[
+            List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
                             heuristic_estimates_cache: Union[
                                 Dict[Tuple[int, int, int, int], int], int, Dict[
                                     Tuple[int, int, int, int, int, int], int], None], dead_teams_check: bool,
@@ -255,7 +276,7 @@ def update(stats: Statistics, game_result: GameResult):
         stats.optimality_checks_failed += 1
 
 
-def solution_to_rounds_matrix(ttp_instance: TTPInstance, solution: np.array(1, Tuple[int, int])):
+def solution_to_rounds_matrix(ttp_instance: TTPInstance, solution: List[Tuple[int, int]]):
     copied_solution = copy(solution)
     rounds = 2 * ttp_instance.n - 2
     rounds_matrix = np.zeros((rounds, ttp_instance.n), dtype=int)
@@ -267,7 +288,8 @@ def solution_to_rounds_matrix(ttp_instance: TTPInstance, solution: np.array(1, T
     return rounds_matrix
 
 
-def construct(ttp_instance: TTPInstance, bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
+def construct(ttp_instance: TTPInstance,
+              bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
               beam_width: int, dead_teams_check: bool, randomized_team_order: bool, sigma_rel: float,
               heuristic_estimates_cache: Union[
                   Dict[Tuple[int, int, int, int], int], int, Dict[Tuple[int, int, int, int, int, int], int], None],
@@ -278,8 +300,14 @@ def construct(ttp_instance: TTPInstance, bounds_by_state: Union[List[List[List[L
     root.heuristic_estimates = np.zeros(ttp_instance.n, dtype=int)
     for team in range(1, ttp_instance.n + 1):
         teams_left = np.delete(np.arange(1, ttp_instance.n + 1), team - 1)
-        root.heuristic_estimates[team - 1] = heuristic_estimate(ttp_instance, team, teams_left, ttp_instance.n - 1,
-                                                                team, 0, bounds_by_state, heuristic_estimates_cache)
+        if np.ndim(bounds_by_state) == 4:
+            root.heuristic_estimates[team - 1] = heuristic_estimate(ttp_instance, team, teams_left, ttp_instance.n - 1,
+                                                                    team, 0, bounds_by_state, heuristic_estimates_cache)
+        else:
+            root.heuristic_estimates[team - 1] = heuristic_estimate_cvrph(ttp_instance, team, teams_left,
+                                                                          ttp_instance.n - 1,
+                                                                          team, 0, bounds_by_state,
+                                                                          heuristic_estimates_cache)
         root.away_games_left_by_team.append([])
         root.home_games_left_by_team.append([])
         root.away_games_left_by_team[team - 1] = teams_left
@@ -315,7 +343,7 @@ def construct(ttp_instance: TTPInstance, bounds_by_state: Union[List[List[List[L
 
         Entries are typically tuples of the form:  (priority number, data).
         '''
-    beam = PriorityQueue()
+    beam = heapdict.heapdict()
 
     for layer in range(0, last_layer + 1):
         print("layer %d size %d" % (layer, len(Q)))
@@ -340,8 +368,8 @@ def construct(ttp_instance: TTPInstance, bounds_by_state: Union[List[List[List[L
                                                           noise)
                     update(stats, game_result)
 
-        Q = sorted(map(lambda x: x[1], beam.queue))
-        beam = PriorityQueue()
+        Q = sorted(map(lambda x: x[0], beam.heap))
+        beam = heapdict.heapdict()
 
     stats.heuristic_estimates_cache_size = len(heuristic_estimates_cache)
     print("feasibility checks failed %d" % stats.feasibility_checks_failed)

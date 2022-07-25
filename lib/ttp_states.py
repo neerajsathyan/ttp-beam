@@ -3,6 +3,7 @@ from copy import copy
 from typing import Union
 
 import numpy as np
+import xxhash
 
 from lib.ttp_instance import TTPInstance
 
@@ -19,15 +20,16 @@ class State:
         self.possible_home_stands = possible_home_stands
 
     def __hash__(self):
-        return hash((self.games_let, self.forbidden_opponents, self.rounds, self.positions, self.possible_away_streaks,
-                     self.possible_home_stands))
+        # return hash((self.games_left, self.forbidden_opponents, self.rounds, self.positions,
+        # self.possible_away_streaks, self.possible_home_stands))
+        return xxhash.xxh32_intdigest(self.games_left, seed=xxhash.xxh32_intdigest(self.forbidden_opponents, seed=xxhash.xxh32_intdigest(self.rounds, seed=xxhash.xxh32_intdigest(self.positions, seed=xxhash.xxh32_intdigest(self.possible_away_streaks, seed=xxhash.xxh32_intdigest(self.possible_home_stands))))))
 
     def __eq__(self, other):
-        return (self.games_let, self.forbidden_opponents, self.rounds, self.positions, self.possible_away_streaks,
-                self.possible_home_stands) == (
-                   other.games_let, other.forbidden_opponents, other.rounds, other.positions,
-                   other.possible_away_streaks,
-                   other.possible_home_stands)
+        return (np.array_equal(self.games_left, other.games_left) and np.array_equal(self.forbidden_opponents,
+                                                                                     other.forbidden_opponents)
+                and np.array_equal(self.rounds, other.rounds) and np.array_equal(self.positions, other.positions)
+                and np.array_equal(self.possible_away_streaks, other.possible_away_streaks) and np.array_equal(
+                    self.possible_home_stands, other.possible_home_stands))
 
 
 class Node:
@@ -57,16 +59,16 @@ class Node:
                      self.teams_home_stand_limit_hit_last_round, self.teams_home_stand_limit_hit_current_round))
 
     def __eq__(self, other):
-        return (self.layer, self.shortest_path_length, self.heuristic_estimate, self.games_left, self.state,
-                self.heuristic_estimates, self.noise, self.solution, self.number_of_away_games_left,
-                self.number_of_home_games_left, self.away_games_left_by_team, self.home_games_left_by_team,
-                self.teams_away_streak_limit_hit_last_round, self.teams_away_streak_limit_hit_current_round,
-                self.teams_home_stand_limit_hit_last_round, self.teams_home_stand_limit_hit_current_round) == (
-                   other.layer, other.shortest_path_length, other.heuristic_estimate, other.games_left, other.state,
-                   other.heuristic_estimates, other.noise, other.solution, other.number_of_away_games_left,
-                   other.number_of_home_games_left, other.away_games_left_by_team, other.home_games_left_by_team,
-                   other.teams_away_streak_limit_hit_last_round, other.teams_away_streak_limit_hit_current_round,
-                   other.teams_home_stand_limit_hit_last_round, other.teams_home_stand_limit_hit_current_round)
+        return (self.shortest_path_length + self.heuristic_estimate + self.noise, self.shortest_path_length) == (
+            other.shortest_path_length + other.heuristic_estimate + other.noise, other.shortest_path_length)
+
+    def __gt__(self, other):
+        return (self.shortest_path_length + self.heuristic_estimate + self.noise, self.shortest_path_length) > (
+            other.shortest_path_length + other.heuristic_estimate + other.noise, other.shortest_path_length)
+
+    def __lt__(self, other):
+        return (self.shortest_path_length + self.heuristic_estimate + self.noise, self.shortest_path_length) < (
+            other.shortest_path_length + other.heuristic_estimate + other.noise, other.shortest_path_length)
 
 
 # a state transitions copies the existing states and makes corresponding updates determined by the game being played

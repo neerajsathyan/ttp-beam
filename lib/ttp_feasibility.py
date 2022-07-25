@@ -1,6 +1,6 @@
+# TTP feasibility related checks for beam search nodes
 from math import ceil
 
-import numpy as np
 
 from lib.ttp_instance import TTPInstance
 from lib.ttp_states import State, Node, update_state
@@ -130,8 +130,8 @@ def delta_game_allowed(ttp_instance: TTPInstance, state: State, team: int, oppon
 # checks whether there would be a team left after game (away_team, home_team), that has no permitted games,
 # a dead team, O(n^2)
 def delta_check_dead_team(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int):
-    state = update_state(ttp_instance, node.state, away_team, home_team, node.number_of_away_games_left[home_team],
-                         node.number_of_home_games_left[away_team])
+    state = update_state(ttp_instance, node.state, away_team, home_team, node.number_of_away_games_left[home_team - 1],
+                         node.number_of_home_games_left[away_team - 1])
 
     games_per_round = ttp_instance.n / 2
     current_round = ceil((node.layer + 1) / games_per_round)
@@ -141,10 +141,6 @@ def delta_check_dead_team(ttp_instance: TTPInstance, node: Node, away_team: int,
     teams_away_streak_limit_hit_current_round = node.teams_away_streak_limit_hit_current_round
     teams_home_stand_limit_hit_last_round = node.teams_home_stand_limit_hit_last_round
     teams_home_stand_limit_hit_current_round = node.teams_home_stand_limit_hit_current_round
-    teams_away_streak_limit_hit_last_round_2 = 0
-    teams_away_streak_limit_hit_current_round_2 = 0
-    teams_home_stand_limit_hit_last_round_2 = 0
-    teams_home_stand_limit_hit_current_round_2 = 0
 
     if games_played_in_this_round == 1:
         teams_home_stand_limit_hit_last_round = teams_home_stand_limit_hit_current_round
@@ -200,7 +196,7 @@ def delta_check_dead_team(ttp_instance: TTPInstance, node: Node, away_team: int,
                     witness_found = True
                     break
         if not witness_found:
-            # @printf("no witness for %d\n", team)
+            # print("no witness for %d" % team)
             return False
 
     return True
