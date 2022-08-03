@@ -10,13 +10,14 @@ from lib.ttp_feasibility import game_allowed, delta_feasibility_check
 from lib.ttp_instance import TTPInstance
 from lib.ttp_node_estimators import heuristic_estimate, heuristic_estimate_cvrph
 from lib.ttp_states import Node, State, update_state
+from lib.ttp_util import save_numpy_pickle
 
 
 class Statistics:
     def __init__(self):
         self.feasibility_checks_failed: int = 0
         self.optimality_checks_failed: int = 0
-        self.construction_time: float = 0
+        self.construction_time: float = 0.0
         self.heuristic_estimates_cache_size: int = 0
 
 
@@ -27,6 +28,8 @@ class GameResult(enum.Enum):
     suboptimal = 4
 
 
+# special states are the root state..
+# Checked
 def root_state(ttp_instance: TTPInstance):
     games_left = np.ones((ttp_instance.n, ttp_instance.n), bool)
     games_left[np.diag_indices(ttp_instance.n)] = False
@@ -38,6 +41,8 @@ def root_state(ttp_instance: TTPInstance):
     return State(games_left, forbidden_opponents, rounds, positions, possible_away_streaks, possible_home_stands)
 
 
+# ..and the terminal state, only paths that reach it, correspond to a feasible solution1
+# Checked
 def terminal_state(ttp_instance: TTPInstance):
     games_left = np.zeros((ttp_instance.n, ttp_instance.n), bool)
     forbidden_opponents = -np.ones(ttp_instance.n, dtype=int)
@@ -48,21 +53,27 @@ def terminal_state(ttp_instance: TTPInstance):
     return State(games_left, forbidden_opponents, rounds, positions, possible_away_streaks, possible_home_stands)
 
 
+# after last round every team has to go to its home venue, while half of them will be already there
+# Checked
 def go_home(ttp_instance: TTPInstance, node: Node, terminal: Node):
     weight = np.sum(
-        map(lambda x: ttp_instance.d[node.state.positions[x - 1] - 1][x - 1], np.arange(1, ttp_instance.n + 1)))
+        list(map(lambda x: ttp_instance.d[node.state.positions[x - 1] - 1][x - 1], np.arange(1, ttp_instance.n + 1))))
     if node.shortest_path_length + weight < terminal.shortest_path_length:
         terminal.shortest_path_length = node.shortest_path_length + weight
         terminal.solution = copy(node.solution)
     return terminal
 
 
+# in each layer, to break the symmetry within a round, one specific team is selected to play all its possible away
+# and home games
+# Checked
 def next_team(ttp_instance: TTPInstance, node: Node, teams_permutation: []):
-    return np.argmin(
-        map(lambda x: (node.state.rounds[x - 1], teams_permutation[x - 1]), np.arange(1, ttp_instance.n + 1))) + 1
+    ty = list(map(lambda x: (node.state.rounds[x - 1], teams_permutation[x - 1]), np.arange(1, ttp_instance.n + 1)))
+    return ty.index(min(ty)) + 1
 
 
 # Optional Gaussian noise for f-values..
+# Checked
 def noise_for_guidance_value(sigma: float, layer: int, first_k_layers_noisy: int):
     if first_k_layers_noisy == -1 or layer <= first_k_layers_noisy:
         return np.random.randn() * sigma
@@ -72,6 +83,7 @@ def noise_for_guidance_value(sigma: float, layer: int, first_k_layers_noisy: int
 
 # incrementally checks whether playing (away_team, home_team) would result into a node that is admissible for the
 # beam by its f-value, otherwise it is not expanded
+# Checked
 def delta_optimality_check(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int, beam: heapdict,
                            beam_width: int,
                            bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
@@ -88,16 +100,31 @@ def delta_optimality_check(ttp_instance: TTPInstance, node: Node, away_team: int
     home_team_number_of_home_games_left = node.number_of_home_games_left[home_team - 1] - 1
 
     heuristic_estimate_delta = -(node.heuristic_estimates[away_team - 1] + node.heuristic_estimates[home_team - 1])
-    heuristic_estimate_delta += heuristic_estimate(ttp_instance, away_team, away_team_away_teams_left,
-                                                   away_team_number_of_home_games_left, home_team,
-                                                   ttp_instance.streak_limit - (
-                                                           node.state.possible_away_streaks[away_team - 1] - 1),
-                                                   bounds_by_state, heuristic_estimates_cache)
-    heuristic_estimate_delta += heuristic_estimate(ttp_instance, home_team, home_team_away_teams_left,
-                                                   home_team_number_of_home_games_left, home_team,
-                                                   ttp_instance.streak_limit - (
-                                                           node.state.possible_home_stands[home_team - 1] - 1),
-                                                   bounds_by_state, heuristic_estimates_cache)
+
+    if np.ndim(bounds_by_state) == 4:
+        heuristic_estimate_delta += heuristic_estimate(ttp_instance, away_team, away_team_away_teams_left,
+                                                       away_team_number_of_home_games_left, home_team,
+                                                       ttp_instance.streak_limit - (
+                                                               node.state.possible_away_streaks[away_team - 1] - 1),
+                                                       bounds_by_state, heuristic_estimates_cache)
+        heuristic_estimate_delta += heuristic_estimate(ttp_instance, home_team, home_team_away_teams_left,
+                                                       home_team_number_of_home_games_left, home_team,
+                                                       ttp_instance.streak_limit - (
+                                                               node.state.possible_home_stands[home_team - 1] - 1),
+                                                       bounds_by_state, heuristic_estimates_cache)
+    else:
+        heuristic_estimate_delta += heuristic_estimate_cvrph(ttp_instance, away_team, away_team_away_teams_left,
+                                                             away_team_number_of_home_games_left, home_team,
+                                                             ttp_instance.streak_limit - (
+                                                                     node.state.possible_away_streaks[
+                                                                         away_team - 1] - 1),
+                                                             bounds_by_state, heuristic_estimates_cache)
+        heuristic_estimate_delta += heuristic_estimate_cvrph(ttp_instance, home_team, home_team_away_teams_left,
+                                                             home_team_number_of_home_games_left, home_team,
+                                                             ttp_instance.streak_limit - (
+                                                                     node.state.possible_home_stands[
+                                                                         home_team - 1] - 1),
+                                                             bounds_by_state, heuristic_estimates_cache)
 
     if len(beam) >= beam_width:
         worst_state, worst_node = beam.peekitem()
@@ -107,6 +134,7 @@ def delta_optimality_check(ttp_instance: TTPInstance, node: Node, away_team: int
     return True
 
 
+# Checked
 def calc_streak_limit_hits(ttp_instance: TTPInstance, node: Node, state: State, old_node: Node, away_team: int,
                            home_team: int):
     games_per_round = ttp_instance.n / 2
@@ -144,6 +172,7 @@ def calc_streak_limit_hits(ttp_instance: TTPInstance, node: Node, state: State, 
 
 
 # perform a state transition by playing game (away_team, home_team)
+# Checked
 def play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int,
               bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
               heuristic_estimates_cache: Union[
@@ -181,21 +210,49 @@ def play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: 
 
     new_node.solution.append((away_team, home_team))
 
-    new_node.heuristic_estimates[away_team - 1] = heuristic_estimate(ttp_instance, away_team,
-                                                                     new_node.away_games_left_by_team[away_team - 1],
-                                                                     new_node.number_of_home_games_left[away_team - 1],
-                                                                     new_node.state.positions[away_team - 1],
-                                                                     ttp_instance.streak_limit -
-                                                                     new_node.state.possible_away_streaks[
-                                                                         away_team - 1], bounds_by_state,
-                                                                     heuristic_estimates_cache)
-    new_node.heuristic_estimates[home_team - 1] = heuristic_estimate(ttp_instance, home_team,
-                                                                     new_node.away_games_left_by_team[home_team - 1],
-                                                                     new_node.number_of_home_games_left[home_team - 1],
-                                                                     new_node.state.positions[home_team - 1],
-                                                                     ttp_instance.streak_limit -
-                                                                     new_node.state.possible_home_stands[home_team - 1],
-                                                                     bounds_by_state, heuristic_estimates_cache)
+    if np.ndim(bounds_by_state) == 4:
+        new_node.heuristic_estimates[away_team - 1] = heuristic_estimate(ttp_instance, away_team,
+                                                                         new_node.away_games_left_by_team[
+                                                                             away_team - 1],
+                                                                         new_node.number_of_home_games_left[
+                                                                             away_team - 1],
+                                                                         new_node.state.positions[away_team - 1],
+                                                                         ttp_instance.streak_limit -
+                                                                         new_node.state.possible_away_streaks[
+                                                                             away_team - 1], bounds_by_state,
+                                                                         heuristic_estimates_cache)
+        new_node.heuristic_estimates[home_team - 1] = heuristic_estimate(ttp_instance, home_team,
+                                                                         new_node.away_games_left_by_team[
+                                                                             home_team - 1],
+                                                                         new_node.number_of_home_games_left[
+                                                                             home_team - 1],
+                                                                         new_node.state.positions[home_team - 1],
+                                                                         ttp_instance.streak_limit -
+                                                                         new_node.state.possible_home_stands[
+                                                                             home_team - 1],
+                                                                         bounds_by_state, heuristic_estimates_cache)
+    else:
+        new_node.heuristic_estimates[away_team - 1] = heuristic_estimate_cvrph(ttp_instance, away_team,
+                                                                               new_node.away_games_left_by_team[
+                                                                                   away_team - 1],
+                                                                               new_node.number_of_home_games_left[
+                                                                                   away_team - 1],
+                                                                               new_node.state.positions[away_team - 1],
+                                                                               ttp_instance.streak_limit -
+                                                                               new_node.state.possible_away_streaks[
+                                                                                   away_team - 1], bounds_by_state,
+                                                                               heuristic_estimates_cache)
+        new_node.heuristic_estimates[home_team - 1] = heuristic_estimate_cvrph(ttp_instance, home_team,
+                                                                               new_node.away_games_left_by_team[
+                                                                                   home_team - 1],
+                                                                               new_node.number_of_home_games_left[
+                                                                                   home_team - 1],
+                                                                               new_node.state.positions[home_team - 1],
+                                                                               ttp_instance.streak_limit -
+                                                                               new_node.state.possible_home_stands[
+                                                                                   home_team - 1],
+                                                                               bounds_by_state,
+                                                                               heuristic_estimates_cache)
 
     new_node.heuristic_estimate = np.sum(new_node.heuristic_estimates)
     new_node.noise = noise
@@ -222,6 +279,7 @@ def check_state_exists(state: State, beam_dict: Dict[State, Tuple[Node, int, int
 
 # conditionally incorporate node into beam or update existing node with same state, if shortest path to it has been
 # found
+# Checked
 def incorporate(parent: Node, new_node: Node, beam: heapdict, beam_width: int):
     # if haskey(beam, new_node.state)
     # if haskey(nodes, new_node.state)
@@ -246,6 +304,7 @@ def incorporate(parent: Node, new_node: Node, beam: heapdict, beam_width: int):
 
 # conditionally play (away_team, home_team), if it is currently allowed and would not result into an infeasible state
 # (according to our checks) and suboptimal node given our current beam
+# Checked
 def conditionally_play_game(ttp_instance: TTPInstance, node: Node, away_team: int, home_team: int, beam: heapdict,
                             beam_width: int, bounds_by_state: Union[
             List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
@@ -269,6 +328,7 @@ def conditionally_play_game(ttp_instance: TTPInstance, node: Node, away_team: in
         return GameResult.disallowed
 
 
+# Checked
 def update(stats: Statistics, game_result: GameResult):
     if game_result == GameResult.infeasible:
         stats.feasibility_checks_failed += 1
@@ -276,24 +336,28 @@ def update(stats: Statistics, game_result: GameResult):
         stats.optimality_checks_failed += 1
 
 
+# convert solution in form of growing vector to rounds matrix
+# Checked
 def solution_to_rounds_matrix(ttp_instance: TTPInstance, solution: List[Tuple[int, int]]):
     copied_solution = copy(solution)
     rounds = 2 * ttp_instance.n - 2
     rounds_matrix = np.zeros((rounds, ttp_instance.n), dtype=int)
     for round in range(1, rounds + 1):
-        for i in range(1, (ttp_instance.n / 2) + 1):
+        for i in range(1, int(ttp_instance.n / 2) + 1):
             game = solution.pop()
-            rounds_matrix[round - 1][game[0]] = -game[1]
-            rounds_matrix[round - 1][game[1]] = game[0]
+            rounds_matrix[round - 1][game[0] - 1] = -game[1]
+            rounds_matrix[round - 1][game[1] - 1] = game[0]
     return rounds_matrix
 
 
+# main function in this module, performs the actual beam search, the layerwise truncated BFS on the TTP state graph
+# Checked
 def construct(ttp_instance: TTPInstance,
               bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
               beam_width: int, dead_teams_check: bool, randomized_team_order: bool, sigma_rel: float,
               heuristic_estimates_cache: Union[
                   Dict[Tuple[int, int, int, int], int], int, Dict[Tuple[int, int, int, int, int, int], int], None],
-              first_k_layers_noisy: int = -1):
+              cvrp_bounds_file: str, first_k_layers_noisy: int = -1):
     root = Node()
     root.shortest_path_length = 0
     root.games_left = ttp_instance.n * (ttp_instance.n - 1)
@@ -339,10 +403,6 @@ def construct(ttp_instance: TTPInstance,
     print("root heuristic estimate: %d" % root.heuristic_estimate)
 
     Q = [root]
-    '''Variant of Queue that retrieves open entries in priority order (lowest first).
-
-        Entries are typically tuples of the form:  (priority number, data).
-        '''
     beam = heapdict.heapdict()
 
     for layer in range(0, last_layer + 1):
@@ -354,14 +414,14 @@ def construct(ttp_instance: TTPInstance,
             else:
                 team = next_team(ttp_instance, node, teams_permutation)
 
-                for opponent in node.away_games_left_by_team[team]:
+                for opponent in node.away_games_left_by_team[team - 1]:
                     noise = noise_for_guidance_value(sigma, layer + 1, first_k_layers_noisy)
                     game_result = conditionally_play_game(ttp_instance, node, team, opponent, beam, beam_width,
                                                           bounds_by_state, heuristic_estimates_cache, dead_teams_check,
                                                           noise)
                     update(stats, game_result)
 
-                for opponent in node.home_games_left_by_team[team]:
+                for opponent in node.home_games_left_by_team[team - 1]:
                     noise = noise_for_guidance_value(sigma, layer + 1, first_k_layers_noisy)
                     game_result = conditionally_play_game(ttp_instance, node, opponent, team, beam, beam_width,
                                                           bounds_by_state, heuristic_estimates_cache, dead_teams_check,
@@ -371,7 +431,7 @@ def construct(ttp_instance: TTPInstance,
         Q = sorted(map(lambda x: x[0], beam.heap))
         beam = heapdict.heapdict()
 
-    stats.heuristic_estimates_cache_size = len(heuristic_estimates_cache)
+    stats.heuristic_estimates_cache_size = np.size(heuristic_estimates_cache)
     print("feasibility checks failed %d" % stats.feasibility_checks_failed)
     print("optimality checks failed %d" % stats.optimality_checks_failed)
     print("shortest path length %d" % terminal.shortest_path_length)
@@ -380,5 +440,8 @@ def construct(ttp_instance: TTPInstance,
     if len(terminal.solution) == 0:
         print("no feasible solution found")
     else:
-        print(solution_to_rounds_matrix(ttp_instance, terminal.solution))
+        sol_matrix = solution_to_rounds_matrix(ttp_instance, terminal.solution)
+        save_numpy_pickle("data/beam_search/" + cvrp_bounds_file, sol_matrix)
+        # print(solution_to_rounds_matrix(ttp_instance, terminal.solution))
+
     return terminal, stats

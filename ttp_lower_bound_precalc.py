@@ -1,7 +1,12 @@
 #!/usr/bin/python
 import sys
+import csv
+from hashlib import md5
+import uuid
 
 import numpy as np
+import time
+# import resource
 
 import lib.ttp_cvrp as TTPCVRP
 import lib.ttp_util as TTPUtil
@@ -31,7 +36,24 @@ def main():
     print("root bound %d\n" % root_bound_sum)
 
     TTPUtil.save_numpy_pickle(numpy_pickle_file, bounds_by_state)
+    return np.sum(bounds_by_state), root_bound_sum
 
 
 if __name__ == "__main__":
-    main()
+    time_start = time.perf_counter()
+    bounds_by_state_sum, root_bound_sum = main()
+    time_elapsed = (time.perf_counter() - time_start)
+    # memMb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0 / 1024.0
+    print("%5.8f secs" % time_elapsed)
+
+    # Collect all data to a csv file
+    f = open('data/lower_bounds/results.csv', 'a')
+    writer = csv.writer(f)
+    typ = 'TSP'
+    if int(sys.argv[4]) == 0:
+        typ = 'CVRP'
+    elif int(sys.argv[4]) == 1:
+        typ = 'CVRPH'
+    writer.writerow([md5(sys.argv[1].encode()).hexdigest()+"_"+str(uuid.uuid4()), sys.argv[1], int(sys.argv[2]), sys.argv[3], typ, bounds_by_state_sum, root_bound_sum, time_elapsed])
+    f.close()
+

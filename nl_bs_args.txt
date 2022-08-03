@@ -1,0 +1,3 @@
+insts/NL/nl4.txt 3 1 data/nl4_cvrph.pkl.bz2 10000 1 1 0.001 -1
+3 runs for each instance: nl4-16, cvrp_all_pickle_instances, beam_width: 1/10/100/1000/10000/15000, relative_sigma: 0/0.1/0.01/0.001/0.0001, first_k_layers_noisy:-1 n n(n-1)
+

@@ -7,6 +7,7 @@ from lib.ttp_util import mask_teams_left
 
 
 # the remaining number of home games imply a minimum of vehicles (away streaks) for feasibility...
+# Checked
 def min_vehicles_by_home_games(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
                                number_of_home_games_left: int, position: int, streak: int):
     if team == position:
@@ -16,6 +17,7 @@ def min_vehicles_by_home_games(ttp_instance: TTPInstance, team: int, teams_left:
 
 
 # .. so do the remaining away games
+# Checked
 def min_vehicles_by_away_games(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
                                number_of_home_games_left: int, position: int, streak: int):
     if team == position:
@@ -25,12 +27,14 @@ def min_vehicles_by_away_games(ttp_instance: TTPInstance, team: int, teams_left:
 
 
 # the number of home games left imply a maximum number of vehicles
+# Checked
 def max_vehicles_by_home_games(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
                                number_of_home_games_left: int, position: int, streak: int):
     return 1 + number_of_home_games_left
 
 
 # if the streak limit > 1, it is never optimal to have more the one streak with length one, since they can be merged
+# Checked
 def max_vehicles_by_away_games(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
                                number_of_home_games_left: int, position: int, streak: int):
     if team == position:
@@ -44,6 +48,7 @@ def max_vehicles_by_away_games(ttp_instance: TTPInstance, team: int, teams_left:
 
 # the minimum number and maximum number of vehicles needed for solving the CVRPH problem for a team, inferred by the
 # feasibility and optimality considerations the current streak counts as a vehicle
+# Checked
 def min_max_vehicles(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int), number_of_home_games_left: int,
                      position: int, streak: int):
     minimum_vehicles_needed = max(
@@ -59,6 +64,7 @@ def min_max_vehicles(ttp_instance: TTPInstance, team: int, teams_left: np.array(
 
 # this is similar to min max vehicles, but for the precalculated lower bound values we do not count the vehicles (
 # i.e. streaks) but the home stands, where the return home at the end also counts as home stand
+# Checked
 def min_max_home_stands(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
                         number_of_home_games_left: int, position: int, streak: int):
     minimum_vehicles_needed, maximum_vehicles_allowed = min_max_vehicles(ttp_instance, team, teams_left,
@@ -72,16 +78,16 @@ def min_max_home_stands(ttp_instance: TTPInstance, team: int, teams_left: np.arr
 
 # CVRP or TSP
 # heuristic estimates based on precalculated exact cvrp bounds
+# Checked
 def heuristic_estimate(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
                        number_of_home_games_left: int, position: int, streak: int, bounds_by_state: np.array(4, int),
                        heuristic_estimates_cache: None):
-    streak2 = streak
     if len(teams_left) == 0:
         return ttp_instance.d[position - 1][team - 1]
 
     if team == position:
-        streak2 = 0
-    if streak2 == ttp_instance.streak_limit:
+        streak = 0
+    if streak == ttp_instance.streak_limit:
         return ttp_instance.d[position - 1][team - 1] + bounds_by_state[team - 1][mask_teams_left(team, teams_left) - 1][team - 1][0]
     else:
         return min(ttp_instance.d[position - 1][team - 1] +
@@ -90,6 +96,7 @@ def heuristic_estimate(ttp_instance: TTPInstance, team: int, teams_left: np.arra
 
 
 # heuristic estimates based on precalculated exact cvrph bounds
+# Checked
 def heuristic_estimate_cvrph(ttp_instance: TTPInstance, team: int, teams_left: np.array(1, int),
                        number_of_home_games_left: int, position: int, streak: int, bounds_by_state: np.array(5, int),
                        heuristic_estimates_cache: None):

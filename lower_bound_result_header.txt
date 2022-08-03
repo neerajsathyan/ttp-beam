@@ -1,0 +1,2 @@
+lower bound calculation:
+hash(instance_file)+"_"+uuid (id), instance_file, streak_limit, numpy_pickle_file, ttp_instance, cvrp/tsp/cvrph, bounds_sum, root_bound, time_elapsed
