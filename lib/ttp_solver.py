@@ -8,7 +8,7 @@ import numpy as np
 from lib import heapdict
 from lib.ttp_feasibility import game_allowed, delta_feasibility_check
 from lib.ttp_instance import TTPInstance
-from lib.ttp_node_estimators import heuristic_estimate, heuristic_estimate_cvrph
+from lib.ttp_node_estimators import heuristic_estimate, heuristic_estimate_cvrph, heuristic_estimate_tsp
 from lib.ttp_states import Node, State, update_state
 from lib.ttp_util import save_numpy_pickle
 
@@ -353,7 +353,7 @@ def solution_to_rounds_matrix(ttp_instance: TTPInstance, solution: List[Tuple[in
 # main function in this module, performs the actual beam search, the layerwise truncated BFS on the TTP state graph
 # Checked
 def construct(ttp_instance: TTPInstance,
-              bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], None],
+              bounds_by_state: Union[List[List[List[List[int]]]], List[List[List[List[List[int]]]]], List[List[List[int]]], None],
               beam_width: int, dead_teams_check: bool, randomized_team_order: bool, sigma_rel: float,
               heuristic_estimates_cache: Union[
                   Dict[Tuple[int, int, int, int], int], int, Dict[Tuple[int, int, int, int, int, int], int], None],
@@ -365,9 +365,15 @@ def construct(ttp_instance: TTPInstance,
     for team in range(1, ttp_instance.n + 1):
         teams_left = np.delete(np.arange(1, ttp_instance.n + 1), team - 1)
         if np.ndim(bounds_by_state) == 4:
+            # CVRP
             root.heuristic_estimates[team - 1] = heuristic_estimate(ttp_instance, team, teams_left, ttp_instance.n - 1,
                                                                     team, 0, bounds_by_state, heuristic_estimates_cache)
+        elif np.ndim(bounds_by_state) == 3:
+            # TSP
+            root.heuristic_estimates[team - 1] = heuristic_estimate_tsp(ttp_instance, team, teams_left, ttp_instance.n - 1,
+                                                                        team, 0, bounds_by_state, heuristic_estimates_cache)
         else:
+            # CVRPH
             root.heuristic_estimates[team - 1] = heuristic_estimate_cvrph(ttp_instance, team, teams_left,
                                                                           ttp_instance.n - 1,
                                                                           team, 0, bounds_by_state,

@@ -22,15 +22,18 @@ def main():
     streak_limit = int(sys.argv[2])
     numpy_pickle_file = sys.argv[3]
     ttp_instance = TTPInstance.TTPInstance(instance_file, streak_limit, True)
-    cvrp_h_bounds = bool(int(sys.argv[4]))
+    bounds = sys.argv[4]
 
-    if cvrp_h_bounds:
+    if bounds == "cvrph":
         bounds_by_state = np.zeros(
             (ttp_instance.n, 2 ** (ttp_instance.n - 1), ttp_instance.n, streak_limit, ttp_instance.n), dtype=int)
         root_bound_sum = TTPCVRP.calculate_bounds_for_teams_cvrph(ttp_instance, bounds_by_state)
-    else:
+    elif bounds == "cvrp":
         bounds_by_state = np.zeros((ttp_instance.n, 2 ** (ttp_instance.n - 1), ttp_instance.n, streak_limit), dtype=int)
         root_bound_sum = TTPCVRP.calculate_bounds_for_teams(ttp_instance, bounds_by_state)
+    else:
+        bounds_by_state = np.zeros((ttp_instance.n, 2 ** (ttp_instance.n - 1), ttp_instance.n), dtype=int)
+        root_bound_sum = TTPCVRP.calculate_bounds_for_teams_tsp(ttp_instance, bounds_by_state)
 
     print("bounds sum %d\n" % np.sum(bounds_by_state))
     print("root bound %d\n" % root_bound_sum)
@@ -49,11 +52,7 @@ if __name__ == "__main__":
     # Collect all data to a csv file
     f = open('data/lower_bounds/results.csv', 'a')
     writer = csv.writer(f)
-    typ = 'TSP'
-    if int(sys.argv[4]) == 0:
-        typ = 'CVRP'
-    elif int(sys.argv[4]) == 1:
-        typ = 'CVRPH'
+    typ = sys.argv[4].upper()
     writer.writerow([md5(sys.argv[1].encode()).hexdigest()+"_"+str(uuid.uuid4()), sys.argv[1], int(sys.argv[2]), sys.argv[3], typ, bounds_by_state_sum, root_bound_sum, time_elapsed])
     f.close()
 

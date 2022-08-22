@@ -49,14 +49,15 @@ class Node:
 
     def __hash__(self):
         return hash((
-                    self.layer, self.shortest_path_length, self.lower_bound, self.constrained_lower_bounds, self.parent,
-                    self.forward_arcs, self.state))
+            self.layer, self.shortest_path_length, self.lower_bound, self.constrained_lower_bounds, self.parent,
+            self.forward_arcs, self.state))
 
     def __eq__(self, other):
         return (self.layer, self.shortest_path_length, self.lower_bound, self.constrained_lower_bounds, self.parent,
                 self.forward_arcs, self.state) == (
-               other.layer, other.shortest_path_length, other.lower_bound, other.constrained_lower_bounds, other.parent,
-               other.forward_arcs, other.state)
+                   other.layer, other.shortest_path_length, other.lower_bound, other.constrained_lower_bounds,
+                   other.parent,
+                   other.forward_arcs, other.state)
 
 
 # def hash(state: State, h: int):
@@ -157,6 +158,52 @@ def construct(team: int, ttp_instance: TTPInstance.TTPInstance, streak_limit: in
     return nodes, nodes_by_layers, terminal.shortest_path_length
 
 
+def construct_tsp(team, ttp_instance):
+    root = Node()
+    root.shortest_path_length = 0
+    teams_left = set(np.arange(1, ttp_instance.n + 1))
+    teams_left.remove(team)
+    root.state = State(teams_left, team, 0)
+
+    terminal = Node()
+    terminal.shortest_path_length = np.iinfo(np.int32).max
+    terminal.lower_bound = 0
+    terminal.constrained_lower_bounds = np.ones(ttp_instance.n, int) * np.iinfo(np.int32).max
+    terminal.constrained_lower_bounds[0] = 0
+    terminal.state = State(set(), team, 0)
+    terminal.layer = ttp_instance.n - 1
+
+    Q = Queue()
+    Q.put(root)
+
+    nodes = dict()
+    nodes[root.state] = root
+    nodes[terminal.state] = terminal
+
+    nodes_by_layers = {i: deque() for i in range(ttp_instance.n)}
+    nodes_by_layers[0].append(root)
+    nodes_by_layers[ttp_instance.n - 1].append(terminal)
+
+    transitions = 0
+
+    while not Q.empty():
+        node = Q.get()
+        for to_team in node.state.teams_left:
+            if len(node.state.teams_left) > 1:
+                new_node, weight = move_to_team(ttp_instance, node, to_team)
+                transitions += 1
+                incorporate(node, new_node, weight, nodes, nodes_by_layers, Q)
+            else:
+                new_node, weight = move_to_team_and_home(ttp_instance, node, to_team, team)
+                transitions += 1
+                incorporate(node, new_node, weight, nodes, nodes_by_layers, Q)
+
+    print("%d transitions\n" % transitions)
+    print("%d nodes\n" % len(nodes))
+
+    return nodes, nodes_by_layers, terminal.shortest_path_length
+
+
 def calculate_bounds_for_teams(ttp_instance: TTPInstance.TTPInstance, bounds_by_state: np.array(4, int)):
     root_bound_sum = 0
     for team in range(1, ttp_instance.n + 1):
@@ -173,6 +220,25 @@ def calculate_bounds_for_teams(ttp_instance: TTPInstance.TTPInstance, bounds_by_
             bounds_by_state[team - 1][TTPUtil.mask_teams_left(team, node.state.teams_left) - 1][
                 node.state.position - 1][
                 node.state.streak] = node.lower_bound
+
+    return root_bound_sum
+
+
+def calculate_bounds_for_teams_tsp(ttp_instance: TTPInstance, bounds_by_state: np.array(3, int)):
+    root_bound_sum = 0
+    for team in range(1, ttp_instance.n + 1):
+        print("calculating team %d\n" % team)
+        nodes, nodes_by_layers, shortest_path = construct_tsp(team, ttp_instance)
+
+        root_bound_sum += shortest_path
+
+        for i in range(ttp_instance.n - 2, -1, -1):
+            for node in nodes_by_layers[i]:
+                node.lower_bound = min(map(lambda x: x.destination.lower_bound + x.weight, node.forward_arcs))
+
+        for node_state, node in nodes.items():
+            bounds_by_state[team - 1][TTPUtil.mask_teams_left(team, node.state.teams_left) - 1][
+                node.state.position - 1] = node.lower_bound
 
     return root_bound_sum
 
@@ -205,7 +271,9 @@ def calculate_bounds_for_teams_cvrph(ttp_instance: TTPInstance.TTPInstance, boun
                     #                                             x.destination.constrained_lower_bounds[i], x.weight)
                     #                                             for i in range(0, ttp_instance.n - 1)],
                     #                                             node.forward_arcs))
-                    mapped_array = list(map(lambda x: [sum_with_potential_infinity(x.destination.constrained_lower_bounds[i], x.weight) for i in range(ttp_instance.n-1)], node.forward_arcs))
+                    mapped_array = list(
+                        map(lambda x: [sum_with_potential_infinity(x.destination.constrained_lower_bounds[i], x.weight)
+                                       for i in range(ttp_instance.n - 1)], node.forward_arcs))
                     find_min_for_each_element_array(node.constrained_lower_bounds[1:], mapped_array)
                 else:
                     # node.constrained_lower_bounds = min(node.constrained_lower_bounds,

@@ -1,0 +1,86 @@
+CVRPH
+calculating team 1
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 2
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 3
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 4
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 5
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 6
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 7
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 8
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 9
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 10
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 11
+
+1064635 transitions
+
+114649 nodes
+
+calculating team 12
+
+1064635 transitions
+
+114649 nodes
+Running Instance: circ18.txt
+35 transitions
+
+114649 nodes
+
+calculating team 14
+
+1064635 transitions
+
+114649 nodes
+
+bounds sum 206203200
+
+root bound 588Running Instance: circ20.txt
